@@ -1,0 +1,41 @@
+# Put this file in YOUR FORK at: .github/workflows/build-ipa.yml
+# Then: GitHub > Actions > "Build unsigned IPA" > Run workflow. Download the artifact.
+name: Build unsigned IPA
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          NEWEST=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          echo "Using $NEWEST"
+          sudo xcode-select -s "$NEWEST/Contents/Developer"
+          xcodebuild -version
+
+      - name: Archive (no code signing)
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -project calorietracker.xcodeproj \
+            -scheme calorietracker \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/app.xcarchive" \
+            -skipPackagePluginValidation -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package IPA
+        run: |
+          mkdir -p out/Payload
+          cp -R "$RUNNER_TEMP"/app.xcarchive/Products/Applications/*.app out/Payload/
+          cd out && zip -qry FudAI-unsigned.ipa Payload && rm -rf Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FudAI-unsigned-ipa
+          path: out/FudAI-unsigned.ipa
